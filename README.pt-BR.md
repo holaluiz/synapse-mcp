@@ -4,6 +4,7 @@
 
 **Coordene qualquer tarefa entre agentes de IA — da arquitetura do sistema aos testes de terminal.**
 
+[![CI](https://github.com/holaluiz/synapse-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/holaluiz/synapse-mcp/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node: SQLite](https://img.shields.io/badge/Engine-Node:SQLite%20(WAL)-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Protocol: MCP](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-8A2BE2)](https://modelcontextprotocol.io/)
@@ -21,7 +22,7 @@ Conecte **Claude Code**, **Antigravity**, **Codex** e **Cursor** para trabalhar 
 
 > [!IMPORTANT]
 > **Zero Daemons. Zero Nuvem. Zero Compilação Nativa C++.**
-> O Synapse roda nativamente no motor `node:sqlite` do Node 22/24 em modo Write-Ahead Logging (WAL). Cada processo de agente se comunica diretamente com o arquivo `.synapse/brain.db` com concorrência ACID em microssegundos.
+> O Synapse roda nativamente no motor embutido `node:sqlite` (Node `>= 22.13`) em modo Write-Ahead Logging (WAL). Cada processo de agente se comunica diretamente com o arquivo `.synapse/brain.db` com concorrência ACID em microssegundos.
 
 ---
 
@@ -39,6 +40,9 @@ npm run setup
 
 # 3. Verificar diagnósticos e saúde do sistema
 npm run doctor
+
+# 4. (Opcional) Rodar a suíte de testes, incluindo uma corrida de locks entre processos
+npm test
 ```
 
 ---
@@ -96,12 +100,12 @@ Quando múltiplos agentes rodam ao mesmo tempo, cada um inicia seu próprio proc
 
 ## 🛠️ Catálogo Completo de Ferramentas MCP
 
-O Synapse expõe 12 ferramentas MCP tipadas para orquestração multi-agente:
+O Synapse expõe 14 ferramentas MCP tipadas para orquestração multi-agente:
 
 ### 1. Coordenação & Anti-Colisão
-- **`synapse_claim_task`**: Reivindica uma tarefa e aplica travas consultivas em arquivos (ex: `["src/auth/**"]`). Rejeita com detalhes se outro agente já estiver editando a mesma área.
-- **`synapse_release_task`**: Conclui ou libera uma tarefa, remove as travas de arquivos e anota um resumo do que foi entregue.
-- **`synapse_get_tasks`**: Lista todas as tarefas em andamento, pendentes ou bloqueadas e quais arquivos estão travados no momento.
+- **`synapse_claim_task`**: Reivindica uma tarefa e aplica travas consultivas em arquivos, diretórios ou globs (ex: `["src/auth/**"]`). Os padrões são comparados por **sobreposição**: uma trava em `src/auth/**` bloqueia uma reivindicação de `src/auth/login.ts`. A verificação e a gravação rodam numa única transação de escrita do SQLite, então dois agentes nunca ganham os mesmos arquivos.
+- **`synapse_release_task`**: Conclui ou libera uma tarefa sua, remove as travas de arquivos e anota um resumo do que foi entregue. `force: true` limpa travas órfãs deixadas por um agente que travou (fica registrado na auditoria).
+- **`synapse_get_tasks`**: Lista todas as tarefas em andamento, pendentes ou bloqueadas, suas notas de handoff e quais arquivos estão travados no momento.
 
 ### 2. Memória Compartilhada & Decisões Arquiteturais
 - **`synapse_record_decision`**: Grava um *Architectural Decision Record* (ADR) (contexto, decisão, trade-offs) para que nenhum agente desfaça uma escolha de projeto.
@@ -110,13 +114,15 @@ O Synapse expõe 12 ferramentas MCP tipadas para orquestração multi-agente:
 
 ### 3. Dúvidas & Lacunas de Investigação (Inspirado no REA)
 - **`synapse_record_unknown`**: Registra uma dúvida, bug inexplicado ou lacuna de especificação para que outro agente a assuma.
+- **`synapse_investigate_unknown`**: Marca uma dúvida aberta como `investigating` no seu nome, para que nenhum outro agente duplique a investigação.
 - **`synapse_resolve_unknown`**: Fecha a dúvida com a explicação ou correção verificada.
 - **`synapse_list_unknowns`**: Lista todas as dúvidas abertas ordenadas por severidade (*critical*, *high*, *medium*, *low*).
 
-### 4. Roteamento por Especialidade & Handoffs
+### 4. Roteamento por Especialidade, Handoffs & Auditoria
 - **`synapse_recommend_agent`**: Avalia o enunciado da tarefa contra a matriz de competências (Antigravity para UI/arquitetura no IDE, Claude Code para terminal/git/testes pesados, Codex para algoritmos isolados).
-- **`synapse_handoff_task`**: Transfere a responsabilidade da tarefa e os locks de arquivos para outro agente com instruções detalhadas.
+- **`synapse_handoff_task`**: Transfere a responsabilidade da tarefa e os locks de arquivos do agente dono para outro, com notas que o destinatário vê em `synapse_get_tasks`.
 - **`synapse_get_active_agents`**: Informa quais agentes mandaram batimento cardíaco (*heartbeat*) nos últimos 15 minutos.
+- **`synapse_get_activity`**: Lê a trilha de auditoria compartilhada (claims, releases, handoffs, decisões, dúvidas), com filtro por agente e por data (`since`).
 
 *Para ver os schemas completos e exemplos, consulte [docs/tools-reference.md](docs/tools-reference.md).*
 
@@ -166,6 +172,7 @@ sequenceDiagram
 - 🛠️ [Referência Completa das Ferramentas MCP](docs/tools-reference.md)
 - 🤝 [Receitas de Colaboração Multi-Agente](docs/multi-agent-workflows.md)
 - 🔌 [Guia de Configuração dos Clientes](docs/client-configuration.md)
+- 📝 [Changelog](CHANGELOG.md)
 - 📜 [Diretrizes de Contribuição](CONTRIBUTING.md)
 - 🤖 [Instruções para Agentes de IA](AGENTS.md)
 

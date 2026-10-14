@@ -1,5 +1,7 @@
-import { getDatabase } from "../db/database.js";
+import { getDatabase, withTransaction } from "../db/database.js";
 import type { Agent } from "../contracts/types.js";
+import { ActivityService } from "./activityService.js";
+import { normalizeAgentName, normalizedAgentSql, sameAgent } from "./agentIdentity.js";
 
 export interface AgentSpecialty {
   client_type: string;
@@ -68,7 +70,62 @@ export const AGENT_MATRIX: Record<string, AgentSpecialty> = {
   },
 };
 
+/**
+ * Routing keywords per agent. Words of 3 letters or fewer must match a whole
+ * word ("ci" must not match "circuit"); longer ones also match as a word
+ * prefix ("test" matches "tests" and "testing", but not "latest").
+ * On a score tie, the agent listed first wins.
+ */
+const ROUTING_KEYWORDS: Array<{ agent: string; keywords: string[] }> = [
+  {
+    agent: "claude_code",
+    keywords: [
+      "git", "github", "test", "cli", "terminal", "shell", "bash", "rebase", "ci", "cd", "pipeline",
+      "npm", "build", "commit", "branch", "merge", "release", "changelog", "lint", "deploy", "tag",
+    ],
+  },
+  {
+    agent: "antigravity",
+    keywords: [
+      "ui", "ux", "frontend", "react", "vue", "component", "design", "css", "layout", "page",
+      "architect", "refactor", "scaffold", "visual", "diagram", "styl",
+    ],
+  },
+  {
+    agent: "codex",
+    keywords: ["algorithm", "script", "calc", "pars", "regex", "math", "utility", "benchmark", "transform", "sort"],
+  },
+  {
+    agent: "cursor",
+    keywords: ["inline", "tweak", "typo", "rename", "autocomplet"],
+  },
+];
+
+const ROUTING_RATIONALE: Record<string, string> = {
+  claude_code: "This task involves terminal execution, git workflows, or test suite execution, where Claude Code excels.",
+  antigravity:
+    "This task involves architecture, UI/frontend design, or multi-file IDE refactoring, where Antigravity provides the best visual and compilation feedback.",
+  codex: "This task is well-suited for isolated algorithmic implementation or script execution.",
+  cursor: "This task is a small, localized edit well-suited to inline editor assistance.",
+};
+
+function keywordMatches(keyword: string, word: string): boolean {
+  return keyword.length <= 3 ? word === keyword : word.startsWith(keyword);
+}
+
 export class RouterService {
+  /** Last heartbeat timestamp for an agent, or null if it was never seen */
+  static getLastActive(agentName: string): string | null {
+    const db = getDatabase();
+    const row = db.prepare(`
+      SELECT last_active FROM agents
+      WHERE ${normalizedAgentSql("id")} = ?
+      ORDER BY last_active DESC
+      LIMIT 1
+    `).get(normalizeAgentName(agentName)) as { last_active: string } | undefined;
+    return row?.last_active ?? null;
+  }
+
   /** Record agent heartbeat to maintain presence */
   static heartbeat(params: {
     agent_name: string;
@@ -113,77 +170,84 @@ export class RouterService {
     handoff_notes: string;
   }): { ok: boolean; message: string } {
     const db = getDatabase();
-    const now = new Date().toISOString();
 
-    // 1. Update task assignment
-    const update = db.prepare(`
-      UPDATE tasks 
-      SET assigned_agent = ?, updated_at = ?
-      WHERE id = ?
-    `);
-    const res = update.run(params.to_agent, now, params.task_id);
+    return withTransaction(() => {
+      const task = db.prepare("SELECT id, assigned_agent, status FROM tasks WHERE id = ?").get(params.task_id) as
+        | { id: string; assigned_agent: string | null; status: string }
+        | undefined;
+      if (!task) {
+        return { ok: false, message: `Task '${params.task_id}' not found.` };
+      }
+      if (task.status === "completed") {
+        return { ok: false, message: `Task ${params.task_id} is already completed; claim a new task instead.` };
+      }
+      if (task.assigned_agent && !sameAgent(task.assigned_agent, params.from_agent)) {
+        return {
+          ok: false,
+          message: `Task ${params.task_id} is assigned to ${task.assigned_agent}, not ${params.from_agent}; only the owner can hand it off.`,
+        };
+      }
 
-    if (res.changes === 0) {
-      return { ok: false, message: `Task '${params.task_id}' not found.` };
-    }
+      const now = new Date().toISOString();
 
-    // 2. Transfer file locks to the new agent
-    db.prepare(`
-      UPDATE file_locks
-      SET agent_name = ?
-      WHERE task_id = ?
-    `).run(params.to_agent, params.task_id);
+      // 1. Update task assignment and keep the notes on the task for the receiver
+      db.prepare(`
+        UPDATE tasks
+        SET assigned_agent = ?, handoff_notes = ?, updated_at = ?
+        WHERE id = ?
+      `).run(params.to_agent, params.handoff_notes, now, params.task_id);
 
-    // 3. Log handoff in activity
-    db.prepare(`
-      INSERT INTO activity_log (agent_name, action, details)
-      VALUES (?, 'HANDOFF_TASK', ?)
-    `).run(
-      params.from_agent,
-      `Handed off ${params.task_id} to ${params.to_agent}. Notes: ${params.handoff_notes}`
-    );
+      // 2. Transfer file locks to the new agent
+      db.prepare(`
+        UPDATE file_locks
+        SET agent_name = ?
+        WHERE task_id = ?
+      `).run(params.to_agent, params.task_id);
 
-    return {
-      ok: true,
-      message: `Task ${params.task_id} successfully transferred from ${params.from_agent} to ${params.to_agent}. File locks reassigned.`,
-    };
+      // 3. Log handoff in activity
+      ActivityService.log(
+        params.from_agent,
+        "HANDOFF_TASK",
+        `Handed off ${params.task_id} to ${params.to_agent}. Notes: ${params.handoff_notes}`
+      );
+
+      return {
+        ok: true,
+        message: `Task ${params.task_id} successfully transferred from ${params.from_agent} to ${params.to_agent}. File locks reassigned.`,
+      };
+    });
   }
 
   /** Suggest the best agent based on task type */
   static recommendAgent(taskDescription: string): {
     recommended_agent: string;
     rationale: string;
+    matched_keywords: string[];
     matrix: Record<string, AgentSpecialty>;
   } {
-    const text = taskDescription.toLowerCase();
+    const words = taskDescription.toLowerCase().match(/[a-z0-9]+/g) ?? [];
 
-    if (text.includes("git") || text.includes("test") || text.includes("cli") || text.includes("terminal") || text.includes("rebase") || text.includes("ci")) {
-      return {
-        recommended_agent: "claude_code",
-        rationale: "This task involves terminal execution, git workflows, or test suite execution, where Claude Code excels.",
-        matrix: AGENT_MATRIX,
-      };
+    let best: { agent: string; matched: string[] } | null = null;
+    for (const { agent, keywords } of ROUTING_KEYWORDS) {
+      const matched = keywords.filter((kw) => words.some((w) => keywordMatches(kw, w)));
+      if (matched.length > 0 && (!best || matched.length > best.matched.length)) {
+        best = { agent, matched };
+      }
     }
 
-    if (text.includes("ui") || text.includes("frontend") || text.includes("react") || text.includes("component") || text.includes("design") || text.includes("refactor")) {
+    if (!best) {
       return {
         recommended_agent: "antigravity",
-        rationale: "This task involves architecture, UI/frontend design, or multi-file IDE refactoring, where Antigravity provides the best visual and compilation feedback.",
-        matrix: AGENT_MATRIX,
-      };
-    }
-
-    if (text.includes("algorithm") || text.includes("script") || text.includes("calc") || text.includes("parse")) {
-      return {
-        recommended_agent: "codex",
-        rationale: "This task is well-suited for isolated algorithmic implementation or script execution.",
+        rationale: "General architecture and code design defaults to Antigravity for comprehensive workspace control.",
+        matched_keywords: [],
         matrix: AGENT_MATRIX,
       };
     }
 
     return {
-      recommended_agent: "antigravity",
-      rationale: "General architecture and code design defaults to Antigravity for comprehensive workspace control.",
+      recommended_agent: best.agent,
+      rationale: ROUTING_RATIONALE[best.agent],
+      matched_keywords: best.matched,
       matrix: AGENT_MATRIX,
     };
   }

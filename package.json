@@ -7,8 +7,20 @@
     "synapse": "./dist/cli.js"
   },
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "README.pt-BR.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test \"test/*.test.mjs\"",
     "start": "node dist/cli.js mcp",
     "setup": "node dist/cli.js setup",
     "doctor": "node dist/cli.js doctor"

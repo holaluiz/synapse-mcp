@@ -48,4 +48,7 @@ How to maximize developer velocity by pairing **Antigravity**, **Claude Code**, 
 
 1. **Always Claim Before Writing**: Never begin modifying critical files without calling `synapse_claim_task`. This gives other agents immediate visibility and prevents collisions.
 2. **Document Decisions Immediately**: Record an ADR (`synapse_record_decision`) whenever you make a non-obvious choice. It prevents other agents from reverting your decision.
-3. **Don't Swallow Unknowns**: If an agent hits a wall or missing requirement, call `synapse_record_unknown` instead of guessing or hallucinating.
+3. **Don't Swallow Unknowns**: If an agent hits a wall or missing requirement, call `synapse_record_unknown` instead of guessing or hallucinating. Before digging into someone else's gap, call `synapse_investigate_unknown` so nobody duplicates the work.
+4. **Catch Up Before Starting**: Call `synapse_get_activity` with `since` set to your last session to see what other agents claimed, handed off or decided while you were away.
+5. **Lock Precisely**: Prefer `src/auth/**` or exact files over `**`. Overlapping patterns block each other, so an over-broad lock stalls every other agent.
+6. **One Name per Session**: An agent never collides with its own locks. If you run two Claude Code sessions at once, name them distinctly (`claude-code`, `claude-code-2`).
