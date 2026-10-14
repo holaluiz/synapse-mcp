@@ -1,340 +1,275 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import {
+  ClaimTaskInputSchema,
+  GetActivityInputSchema,
+  HandoffTaskInputSchema,
+  InvestigateUnknownInputSchema,
+  ListUnknownsInputSchema,
+  QueryMemoryInputSchema,
+  RecommendAgentInputSchema,
+  RecordDecisionInputSchema,
+  RecordKnowledgeInputSchema,
+  RecordUnknownInputSchema,
+  ReleaseTaskInputSchema,
+  ResolveUnknownInputSchema,
+} from "../contracts/types.js";
 import { TaskService } from "../services/taskService.js";
 import { MemoryService } from "../services/memoryService.js";
 import { UnknownService } from "../services/unknownService.js";
 import { RouterService } from "../services/routerService.js";
-import { getDatabasePath } from "../db/database.js";
+import { ActivityService } from "../services/activityService.js";
+import { getDatabase, getDatabasePath } from "../db/database.js";
+import { VERSION } from "../version.js";
+
+const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
+const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
+
+function text(message: string): CallToolResult {
+  return { content: [{ type: "text", text: message }] };
+}
+
+function json(payload: unknown): CallToolResult {
+  return text(JSON.stringify(payload, null, 2));
+}
+
+function fail(message: string): CallToolResult {
+  return { isError: true, content: [{ type: "text", text: message }] };
+}
 
 export function createSynapseServer(): McpServer {
   const server = new McpServer({
     name: "synapse-mcp",
-    version: "0.1.0",
+    version: VERSION,
   });
 
   // 1. Task: Claim
-  server.tool(
+  server.registerTool(
     "synapse_claim_task",
-    "Claim a task and lock file patterns to prevent collisions with other agents (Claude, Codex, Antigravity)",
     {
-      agent_name: z.string().describe("Your agent name, e.g. 'antigravity', 'claude-code', 'codex'"),
-      title: z.string().describe("Title/summary of the task to work on"),
-      description: z.string().optional().describe("Detailed scope and goals"),
-      lock_patterns: z.array(z.string()).optional().describe("Files or patterns you will modify, e.g. ['src/auth/**', 'package.json']"),
+      description:
+        "Claim a task and lock file patterns to prevent collisions with other agents (Claude, Codex, Antigravity). " +
+        "Globs, directories and files are compared by overlap, so 'src/auth/**' blocks 'src/auth/login.ts'.",
+      inputSchema: ClaimTaskInputSchema.shape,
+      annotations: WRITE,
     },
     async ({ agent_name, title, description, lock_patterns }) => {
       RouterService.heartbeat({ agent_name, client_type: agent_name });
-      const result = TaskService.claimTask({
-        agent_name,
-        title,
-        description,
-        lock_patterns,
-      });
+      const result = TaskService.claimTask({ agent_name, title, description, lock_patterns });
 
       if (!result.ok) {
-        return {
-          isError: true,
-          content: [{ type: "text", text: result.error || "Failed to claim task" }],
-        };
+        return fail(result.error || "Failed to claim task");
       }
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                message: `Task '${title}' claimed successfully. Locks acquired.`,
-                task: result.task,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
+      return json({
+        message: `Task '${title}' claimed successfully. Locks acquired.`,
+        task: result.task,
+      });
     }
   );
 
   // 2. Task: Release / Complete
-  server.tool(
+  server.registerTool(
     "synapse_release_task",
-    "Complete or release a task, freeing all associated file locks for other agents",
     {
-      agent_name: z.string().describe("Your agent name"),
-      task_id: z.string().describe("Task ID to release"),
-      summary: z.string().describe("Summary of what was done or reason for release"),
-      status: z.enum(["completed", "blocked", "pending"]).default("completed").describe("Final status of the task"),
+      description:
+        "Complete or release a task you own, freeing all associated file locks for other agents. " +
+        "Use force only to clear stale locks left by an agent that is gone.",
+      inputSchema: ReleaseTaskInputSchema.shape,
+      annotations: { ...WRITE, destructiveHint: true },
     },
-    async ({ agent_name, task_id, summary, status }) => {
+    async ({ agent_name, task_id, summary, status, force }) => {
       RouterService.heartbeat({ agent_name, client_type: agent_name });
-      const result = TaskService.releaseTask({
-        agent_name,
-        task_id,
-        summary,
-        status,
-      });
-
-      return {
-        content: [{ type: "text", text: result.message }],
-      };
+      const result = TaskService.releaseTask({ agent_name, task_id, summary, status, force });
+      return result.ok ? text(result.message) : fail(result.message);
     }
   );
 
   // 3. Task: List Active Tasks and Locks
-  server.tool(
+  server.registerTool(
     "synapse_get_tasks",
-    "List all ongoing tasks, assigned agents, and currently locked files across all agents",
-    {},
-    async () => {
-      const active = TaskService.getActiveTasks();
-      return {
-        content: [{ type: "text", text: JSON.stringify(active, null, 2) }],
-      };
-    }
+    {
+      description:
+        "List all ongoing tasks, assigned agents, handoff notes, and currently locked files across all agents",
+      annotations: READ_ONLY,
+    },
+    async () => json(TaskService.getActiveTasks())
   );
 
   // 4. Memory: Record Decision (ADR)
-  server.tool(
+  server.registerTool(
     "synapse_record_decision",
-    "Record an Architectural Decision Record (ADR) so other agents understand and respect key technical choices",
     {
-      agent_name: z.string().describe("Your agent name"),
-      title: z.string().describe("Short title of the architectural decision"),
-      context: z.string().describe("Why this decision was made and what was considered"),
-      decision: z.string().describe("The exact chosen approach, library, or rule"),
-      consequences: z.string().optional().describe("Trade-offs or implications of this decision"),
+      description:
+        "Record an Architectural Decision Record (ADR) so other agents understand and respect key technical choices",
+      inputSchema: RecordDecisionInputSchema.shape,
+      annotations: WRITE,
     },
     async ({ agent_name, title, context, decision, consequences }) => {
       RouterService.heartbeat({ agent_name, client_type: agent_name });
-      const record = MemoryService.recordDecision({
-        agent_name,
-        title,
-        context,
-        decision,
-        consequences,
+      const record = MemoryService.recordDecision({ agent_name, title, context, decision, consequences });
+      return json({
+        message: `Architectural Decision Record saved (${record.id}). Visible to all agents.`,
+        decision: record,
       });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                message: `Architectural Decision Record saved (${record.id}). Visible to all agents.`,
-                decision: record,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
     }
   );
 
   // 5. Memory: Record Knowledge
-  server.tool(
+  server.registerTool(
     "synapse_record_knowledge",
-    "Save project conventions, API patterns, configuration gotchas, or reusable knowledge for other agents",
     {
-      agent_name: z.string().describe("Your agent name"),
-      category: z.string().describe("Category, e.g. 'architecture', 'api', 'testing', 'conventions'"),
-      topic: z.string().describe("Specific subject/topic"),
-      content: z.string().describe("The knowledge content, markdown allowed"),
-      tags: z.array(z.string()).optional().describe("Tags for quick discovery"),
+      description:
+        "Save project conventions, API patterns, configuration gotchas, or reusable knowledge for other agents",
+      inputSchema: RecordKnowledgeInputSchema.shape,
+      annotations: WRITE,
     },
     async ({ agent_name, category, topic, content, tags }) => {
       RouterService.heartbeat({ agent_name, client_type: agent_name });
-      const record = MemoryService.recordKnowledge({
-        agent_name,
-        category,
-        topic,
-        content,
-        tags,
+      const record = MemoryService.recordKnowledge({ agent_name, category, topic, content, tags });
+      return json({
+        message: `Knowledge recorded (${record.id}).`,
+        knowledge: record,
       });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                message: `Knowledge recorded (${record.id}).`,
-                knowledge: record,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
     }
   );
 
   // 6. Memory: Query Memory
-  server.tool(
+  server.registerTool(
     "synapse_query_memory",
-    "Search shared decisions and knowledge base across the project",
     {
-      query: z.string().optional().describe("Search keyword or phrase"),
-      category: z.string().optional().describe("Filter by category"),
+      description: "Search shared decisions and knowledge base across the project",
+      inputSchema: QueryMemoryInputSchema.shape,
+      annotations: READ_ONLY,
     },
-    async ({ query, category }) => {
-      const results = MemoryService.queryMemory({ query, category });
-      return {
-        content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
-      };
-    }
+    async ({ query, category }) => json(MemoryService.queryMemory({ query, category }))
   );
 
   // 7. Unknowns: Record Unknown Gap
-  server.tool(
+  server.registerTool(
     "synapse_record_unknown",
-    "Flag an unresolved question, missing spec, or unexplained bug so another agent can investigate it",
     {
-      agent_name: z.string().describe("Your agent name"),
-      question: z.string().describe("The unanswered question or unexplained issue"),
-      context: z.string().optional().describe("Affected files, reproduction details, or hints"),
-      severity: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+      description:
+        "Flag an unresolved question, missing spec, or unexplained bug so another agent can investigate it",
+      inputSchema: RecordUnknownInputSchema.shape,
+      annotations: WRITE,
     },
     async ({ agent_name, question, context, severity }) => {
       RouterService.heartbeat({ agent_name, client_type: agent_name });
-      const unk = UnknownService.recordUnknown({
-        agent_name,
-        question,
-        context,
-        severity,
+      const unk = UnknownService.recordUnknown({ agent_name, question, context, severity });
+      return json({
+        message: `Gap reported (${unk.id}) with severity '${severity}'. Other agents can view and resolve.`,
+        unknown: unk,
       });
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                message: `Gap reported (${unk.id}) with severity '${severity}'. Other agents can view and resolve.`,
-                unknown: unk,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
     }
   );
 
-  // 8. Unknowns: Resolve Unknown Gap
-  server.tool(
-    "synapse_resolve_unknown",
-    "Resolve an open gap with a verified explanation or fix",
+  // 8. Unknowns: Investigate Unknown Gap
+  server.registerTool(
+    "synapse_investigate_unknown",
     {
-      agent_name: z.string().describe("Your agent name"),
-      unknown_id: z.string().describe("ID of the unknown being resolved"),
-      resolution: z.string().describe("Detailed resolution, explanation, or fix"),
+      description:
+        "Take ownership of an open gap by marking it 'investigating', so other agents don't duplicate the investigation",
+      inputSchema: InvestigateUnknownInputSchema.shape,
+      annotations: WRITE,
+    },
+    async ({ agent_name, unknown_id }) => {
+      RouterService.heartbeat({ agent_name, client_type: agent_name });
+      const res = UnknownService.investigateUnknown({ agent_name, unknown_id });
+      return res.ok ? text(res.message) : fail(res.message);
+    }
+  );
+
+  // 9. Unknowns: Resolve Unknown Gap
+  server.registerTool(
+    "synapse_resolve_unknown",
+    {
+      description: "Resolve an open gap with a verified explanation or fix",
+      inputSchema: ResolveUnknownInputSchema.shape,
+      annotations: WRITE,
     },
     async ({ agent_name, unknown_id, resolution }) => {
       RouterService.heartbeat({ agent_name, client_type: agent_name });
-      const res = UnknownService.resolveUnknown({
-        agent_name,
-        unknown_id,
-        resolution,
-      });
-
-      return {
-        content: [{ type: "text", text: res.message }],
-      };
+      const res = UnknownService.resolveUnknown({ agent_name, unknown_id, resolution });
+      return res.ok ? text(res.message) : fail(res.message);
     }
   );
 
-  // 9. Unknowns: List Unknowns
-  server.tool(
+  // 10. Unknowns: List Unknowns
+  server.registerTool(
     "synapse_list_unknowns",
-    "List unresolved questions, gaps, or bugs reported by any agent",
     {
-      status: z.enum(["open", "investigating", "resolved", "all"]).default("open"),
+      description: "List unresolved questions, gaps, or bugs reported by any agent, most severe first",
+      inputSchema: ListUnknownsInputSchema.shape,
+      annotations: READ_ONLY,
     },
-    async ({ status }) => {
-      const unknowns = UnknownService.listUnknowns(status as any);
-      return {
-        content: [{ type: "text", text: JSON.stringify(unknowns, null, 2) }],
-      };
-    }
+    async ({ status }) => json(UnknownService.listUnknowns(status))
   );
 
-  // 10. Router: Handoff Task
-  server.tool(
+  // 11. Router: Handoff Task
+  server.registerTool(
     "synapse_handoff_task",
-    "Hand off a task and its file locks from one agent to another (e.g. Antigravity -> Claude Code for test runs)",
     {
-      from_agent: z.string().describe("Your agent name"),
-      to_agent: z.string().describe("Agent to receive the task (e.g. 'claude-code', 'antigravity', 'codex')"),
-      task_id: z.string().describe("Task ID to transfer"),
-      handoff_notes: z.string().describe("Instructions and context for the receiving agent"),
+      description:
+        "Hand off a task you own and its file locks to another agent (e.g. Antigravity -> Claude Code for test runs). " +
+        "The notes are shown to the receiver in synapse_get_tasks.",
+      inputSchema: HandoffTaskInputSchema.shape,
+      annotations: WRITE,
     },
     async ({ from_agent, to_agent, task_id, handoff_notes }) => {
       RouterService.heartbeat({ agent_name: from_agent, client_type: from_agent });
-      const result = RouterService.handoffTask({
-        from_agent,
-        to_agent,
-        task_id,
-        handoff_notes,
-      });
-
-      return {
-        content: [{ type: "text", text: result.message }],
-      };
+      const result = RouterService.handoffTask({ from_agent, to_agent, task_id, handoff_notes });
+      return result.ok ? text(result.message) : fail(result.message);
     }
   );
 
-  // 11. Router: Recommend Agent
-  server.tool(
+  // 12. Router: Recommend Agent
+  server.registerTool(
     "synapse_recommend_agent",
-    "Consult the agent specialty matrix to determine which AI agent is best equipped for a given task",
     {
-      task_description: z.string().describe("Description of what needs to be done"),
+      description:
+        "Consult the agent specialty matrix to determine which AI agent is best equipped for a given task",
+      inputSchema: RecommendAgentInputSchema.shape,
+      annotations: READ_ONLY,
     },
-    async ({ task_description }) => {
-      const recommendation = RouterService.recommendAgent(task_description);
-      return {
-        content: [{ type: "text", text: JSON.stringify(recommendation, null, 2) }],
-      };
-    }
+    async ({ task_description }) => json(RouterService.recommendAgent(task_description))
   );
 
-  // 12. Presence: Active Agents
-  server.tool(
+  // 13. Presence: Active Agents
+  server.registerTool(
     "synapse_get_active_agents",
-    "See which AI agents are currently active on this project and what they are working on",
-    {},
-    async () => {
-      const agents = RouterService.getActiveAgents();
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                active_agents: agents,
-                database_location: getDatabasePath(),
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    }
+    {
+      description: "See which AI agents are currently active on this project and what they are working on",
+      annotations: READ_ONLY,
+    },
+    async () =>
+      json({
+        active_agents: RouterService.getActiveAgents(),
+        database_location: getDatabasePath(),
+      })
+  );
+
+  // 14. Audit: Activity Log
+  server.registerTool(
+    "synapse_get_activity",
+    {
+      description:
+        "Read the shared audit trail (claims, releases, handoffs, decisions, gaps), newest first. " +
+        "Use 'since' to catch up on what other agents did while you were away.",
+      inputSchema: GetActivityInputSchema.shape,
+      annotations: READ_ONLY,
+    },
+    async ({ limit, agent_name, since }) => json(ActivityService.list({ limit, agent_name, since }))
   );
 
   return server;
 }
 
 export async function runStdioServer(): Promise<void> {
+  // Open the database up front so a broken workspace fails loudly at startup
+  getDatabase();
   const server = createSynapseServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  process.stderr.write(`[synapse-mcp] Connected via stdio. Database: ${getDatabasePath()}\n`);
+  process.stderr.write(`[synapse-mcp] v${VERSION} connected via stdio. Database: ${getDatabasePath()}\n`);
 }

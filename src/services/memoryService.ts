@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "../db/database.js";
 import type { Decision, Knowledge } from "../contracts/types.js";
+import { ActivityService } from "./activityService.js";
+
+/** Escape LIKE wildcards so '%' and '_' in a query match literally */
+function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, "\\$&");
+}
 
 export class MemoryService {
   /** Record an Architectural Decision Record (ADR) */
@@ -20,10 +26,7 @@ export class MemoryService {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, params.title, params.context, params.decision, params.consequences || null, params.agent_name, now);
 
-    db.prepare(`
-      INSERT INTO activity_log (agent_name, action, details)
-      VALUES (?, 'RECORD_DECISION', ?)
-    `).run(params.agent_name, `Recorded ADR '${params.title}' (${id})`);
+    ActivityService.log(params.agent_name, "RECORD_DECISION", `Recorded ADR '${params.title}' (${id})`);
 
     return {
       id,
@@ -54,10 +57,7 @@ export class MemoryService {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(id, params.category, params.topic, params.content, tagsJson, params.agent_name, now);
 
-    db.prepare(`
-      INSERT INTO activity_log (agent_name, action, details)
-      VALUES (?, 'RECORD_KNOWLEDGE', ?)
-    `).run(params.agent_name, `Added knowledge in category '${params.category}': ${params.topic}`);
+    ActivityService.log(params.agent_name, "RECORD_KNOWLEDGE", `Added knowledge in category '${params.category}': ${params.topic}`);
 
     return {
       id,
@@ -70,65 +70,45 @@ export class MemoryService {
     };
   }
 
-  /** Search across decisions and knowledge entries */
+  /**
+   * Search across decisions and knowledge entries. Every whitespace-separated
+   * query term must appear in at least one searchable field (case-insensitive).
+   */
   static queryMemory(params?: { query?: string; category?: string }): {
     decisions: Decision[];
     knowledge: Knowledge[];
   } {
     const db = getDatabase();
-    const q = params?.query ? `%${params.query}%` : null;
+    const terms = (params?.query ?? "").split(/\s+/).filter(Boolean).map((t) => `%${escapeLike(t)}%`);
 
-    let decisions: Decision[] = [];
-    if (q) {
-      decisions = db.prepare(`
-        SELECT id, title, context, decision, consequences, author_agent, created_at
-        FROM decisions
-        WHERE title LIKE ? OR context LIKE ? OR decision LIKE ?
-        ORDER BY created_at DESC
-        LIMIT 20
-      `).all(q, q, q) as unknown as Decision[];
-    } else {
-      decisions = db.prepare(`
-        SELECT id, title, context, decision, consequences, author_agent, created_at
-        FROM decisions
-        ORDER BY created_at DESC
-        LIMIT 20
-      `).all() as unknown as Decision[];
-    }
+    const termFilter = (columns: string[]) =>
+      terms.map(() => `(${columns.map((c) => `${c} LIKE ? ESCAPE '\\'`).join(" OR ")})`);
+    const termArgs = (columnCount: number) => terms.flatMap((t) => Array<string>(columnCount).fill(t));
 
-    let rawKnowledge: any[] = [];
-    if (params?.category && q) {
-      rawKnowledge = db.prepare(`
-        SELECT id, category, topic, content, tags, author_agent, updated_at
-        FROM knowledge
-        WHERE category = ? AND (topic LIKE ? OR content LIKE ?)
-        ORDER BY updated_at DESC
-        LIMIT 20
-      `).all(params.category, q, q) as any[];
-    } else if (params?.category) {
-      rawKnowledge = db.prepare(`
-        SELECT id, category, topic, content, tags, author_agent, updated_at
-        FROM knowledge
-        WHERE category = ?
-        ORDER BY updated_at DESC
-        LIMIT 20
-      `).all(params.category) as any[];
-    } else if (q) {
-      rawKnowledge = db.prepare(`
-        SELECT id, category, topic, content, tags, author_agent, updated_at
-        FROM knowledge
-        WHERE topic LIKE ? OR content LIKE ?
-        ORDER BY updated_at DESC
-        LIMIT 20
-      `).all(q, q) as any[];
-    } else {
-      rawKnowledge = db.prepare(`
-        SELECT id, category, topic, content, tags, author_agent, updated_at
-        FROM knowledge
-        ORDER BY updated_at DESC
-        LIMIT 20
-      `).all() as any[];
+    const decisionColumns = ["title", "context", "decision", "consequences"];
+    const decisionWhere = termFilter(decisionColumns);
+    const decisions = db.prepare(`
+      SELECT id, title, context, decision, consequences, author_agent, created_at
+      FROM decisions
+      ${decisionWhere.length > 0 ? `WHERE ${decisionWhere.join(" AND ")}` : ""}
+      ORDER BY created_at DESC
+      LIMIT 20
+    `).all(...termArgs(decisionColumns.length)) as unknown as Decision[];
+
+    const knowledgeColumns = ["topic", "content", "tags"];
+    const knowledgeWhere = termFilter(knowledgeColumns);
+    const knowledgeArgs = termArgs(knowledgeColumns.length);
+    if (params?.category) {
+      knowledgeWhere.unshift("category = ?");
+      knowledgeArgs.unshift(params.category);
     }
+    const rawKnowledge = db.prepare(`
+      SELECT id, category, topic, content, tags, author_agent, updated_at
+      FROM knowledge
+      ${knowledgeWhere.length > 0 ? `WHERE ${knowledgeWhere.join(" AND ")}` : ""}
+      ORDER BY updated_at DESC
+      LIMIT 20
+    `).all(...knowledgeArgs) as any[];
 
     const knowledge: Knowledge[] = rawKnowledge.map((k) => ({
       ...k,

@@ -5,4 +5,8 @@ export * from "./services/taskService.js";
 export * from "./services/memoryService.js";
 export * from "./services/unknownService.js";
 export * from "./services/routerService.js";
+export * from "./services/activityService.js";
+export * from "./services/agentIdentity.js";
+export * from "./services/lockPatterns.js";
 export * from "./server/mcpServer.js";
+export * from "./version.js";
