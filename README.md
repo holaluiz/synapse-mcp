@@ -2,12 +2,13 @@
 
 # 🧠 Synapse MCP
 
-**Unified Brain, Shared Memory, File Locks, and Task Board for Multi-Agent AI Development.**
+**Coordinate anything across AI coding agents — from system architecture down to terminal tests.**
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MCP](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-green.svg)](https://modelcontextprotocol.io/)
-[![Node: SQLite](https://img.shields.io/badge/Engine-Node:SQLite%20(WAL)-orange.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node: SQLite](https://img.shields.io/badge/Engine-Node:SQLite%20(WAL)-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Protocol: MCP](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-8A2BE2)](https://modelcontextprotocol.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-F5A623.svg)](LICENSE)
+[![Zero Telemetry](https://img.shields.io/badge/Privacy-100%25%20Local--Only-success)](SECURITY.md)
 
 [🇺🇸 English](README.md) • [🇧🇷 Português](README.pt-BR.md)
 
@@ -15,138 +16,157 @@
 
 ---
 
-Work with **Claude Code**, **Codex**, **Antigravity**, and **Cursor** on the **same project simultaneously**, without collisions, lost context, or duplicated work.
+Connect **Claude Code**, **Antigravity**, **Codex**, and **Cursor** to work on the **same repository concurrently** — without overwriting code, losing architectural context, or duplicating effort.
+
+> [!IMPORTANT]
+> **Zero Daemons. Zero Cloud. Zero Native Builds.**
+> Synapse runs on Node 22/24's native `node:sqlite` driver in Write-Ahead Logging (WAL) mode. Every agent process communicates directly with `.synapse/brain.db` with sub-millisecond ACID concurrency.
 
 ---
 
-## 🎯 The Problem
-
-When running multiple AI coding agents on the same repository:
-1. **Isolated OS Processes**: Each agent runs its own MCP server process over `stdio`. RAM is completely isolated.
-2. **Context Blindness**: Claude Code in terminal has no idea what Antigravity just refactored or decided in the IDE.
-3. **Collision & Race Conditions**: Two agents can edit the same files concurrently, overwriting each other's changes.
-4. **Lack of Specialization**: Agents don't know who is best equipped for what task.
-
----
-
-## 💡 The Solution
-
-Synapse MCP connects all your agents to an **embedded SQLite WAL memory hub** located in `.synapse/brain.db` at your repository root. Zero external servers, zero background daemons, zero cloud dependencies.
-
-```mermaid
-flowchart TD
-    subgraph "AI Agents (Clients)"
-        AG1["Claude Code<br/>(Terminal / Git / Test Heavy)"]
-        AG2["Antigravity<br/>(IDE / Architecture / UI / Subagents)"]
-        AG3["Codex<br/>(Sandbox / Isolated Utilities)"]
-        AG4["Cursor<br/>(Fast Inline Completions)"]
-    end
-
-    subgraph "Synapse MCP (stdio instance per agent)"
-        MCP1["synapse-mcp instance"]
-        MCP2["synapse-mcp instance"]
-        MCP3["synapse-mcp instance"]
-        MCP4["synapse-mcp instance"]
-    end
-
-    subgraph "Shared Brain (.synapse/brain.db)"
-        WAL["SQLite WAL Engine<br/>(High Concurrency ACID / 5s Busy Timeout)"]
-        LOCKS["🔒 File Locks & Task Board"]
-        ADRS["📜 Architectural Decisions (ADRs)"]
-        UNK["❓ Unknowns & Investigation Gaps"]
-        SPEC["🧭 Specialty Router & Handoffs"]
-    end
-
-    AG1 <--> MCP1
-    AG2 <--> MCP2
-    AG3 <--> MCP3
-    AG4 <--> MCP4
-
-    MCP1 <--> WAL
-    MCP2 <--> WAL
-    MCP3 <--> WAL
-    MCP4 <--> WAL
-
-    WAL --- LOCKS
-    WAL --- ADRS
-    WAL --- UNK
-    WAL --- SPEC
-```
-
----
-
-## 🚀 Quick Start
-
-### 1. Installation
+## ⚡ Quick Start
 
 ```bash
+# 1. Clone & Build
 git clone https://github.com/holaluiz/synapse-mcp.git
 cd synapse-mcp
 npm install
 npm run build
-```
 
-### 2. Auto-Setup for All Agents
-
-Inspired by REA's configuration engine, Synapse can auto-detect and register itself into your installed agents with a single command:
-```bash
+# 2. Auto-configure all detected AI clients on your system
 npm run setup
-```
-This safely inspects and updates:
-- **Antigravity**: `~/.gemini/config/mcp_config.json`
-- **Claude Code**: `~/.claude.json`
-- **Codex**: `~/.codex/config.toml`
-- **Cursor**: `~/.cursor/mcp.json`
 
-*(Safety backups `.synapse.backup` are automatically created before any modification).*
-
-### 3. Check System Status
-```bash
+# 3. Verify connection & diagnostics
 npm run doctor
 ```
 
 ---
 
-## 🛠️ Available MCP Tools
+## 🔌 Supported AI Clients
 
-| Tool | Category | Description |
-| :--- | :---: | :--- |
-| `synapse_claim_task` | **Coordination** | Claims a task and locks specific file patterns (prevents other agents from editing). |
-| `synapse_release_task` | **Coordination** | Completes a task, records summary, and releases file locks. |
-| `synapse_get_tasks` | **Coordination** | Lists all active tasks, assigned agents, and currently locked files. |
-| `synapse_record_decision` | **Memory** | Saves an Architectural Decision Record (ADR) so all agents respect technical choices. |
-| `synapse_record_knowledge` | **Memory** | Records project conventions, API patterns, and configuration caveats. |
-| `synapse_query_memory` | **Memory** | Searches decisions and knowledge base across the codebase. |
-| `synapse_record_unknown` | **Ledger** | Flags an unexplained bug, missing requirement, or investigation gap for other agents. |
-| `synapse_resolve_unknown` | **Ledger** | Closes an unknown gap with a verified explanation or fix. |
-| `synapse_list_unknowns` | **Ledger** | Lists open or investigating gaps and their severity. |
-| `synapse_handoff_task` | **Routing** | Transfers task ownership and file locks from one agent to another with handover notes. |
-| `synapse_recommend_agent` | **Routing** | Consults the agent capability matrix to advise who should tackle a task. |
-| `synapse_get_active_agents` | **Presence** | Shows which agents are currently active and their latest heartbeats. |
+Synapse detects your installed AI agents and idempotently configures their native MCP registration files with automatic backups (`.synapse.backup`):
 
----
+| Client | Interface | Native Config Location | Auto-Setup | Status |
+| :--- | :---: | :--- | :---: | :---: |
+| **Antigravity** | IDE | `~/.gemini/config/mcp_config.json` | :white_check_mark: | Verified |
+| **Claude Code** | Terminal | `~/.claude.json` | :white_check_mark: | Verified |
+| **Codex** | CLI / Sandbox | `~/.codex/config.toml` | :white_check_mark: | Verified |
+| **Cursor** | IDE | `~/.cursor/mcp.json` | :white_check_mark: | Verified |
+| **OpenCode** | CLI | `~/.config/opencode/opencode.json` | :white_check_mark: | Supported |
+| **Windsurf** | IDE | `~/.codeium/windsurf/mcp_config.json` | Manual | Supported |
+| **VS Code** | IDE | `~/AppData/Roaming/Code/User/mcp.json` | Manual | Supported |
 
-## 🤝 Example Multi-Agent Workflow
-
-1. **Antigravity** opens the project in the IDE:
-   - Calls `synapse_claim_task({ agent_name: "antigravity", title: "Build Auth & User Model", lock_patterns: ["src/auth/**", "src/models/**"] })`.
-   - Records an ADR: `synapse_record_decision({ agent_name: "antigravity", title: "Use Argon2 for password hashing", decision: "Argon2id with salt length 16" })`.
-   - Notices an edge case in JWT expiry and calls `synapse_record_unknown({ question: "Should refresh token rotate on every request?" })`.
-   - Calls `synapse_handoff_task({ from_agent: "antigravity", to_agent: "claude-code", task_id: "task-123", handoff_notes: "Schema and routes written. Please write and execute integration tests." })`.
-
-2. **Claude Code** in the terminal:
-   - Calls `synapse_get_tasks()` and sees `task-123` assigned to it with locks already transferred.
-   - Runs `npm test` in the terminal, verifies the suite, and resolves the edge case.
-   - Calls `synapse_resolve_unknown({ unknown_id: "unk-456", resolution: "Rotates refresh token every 15 minutes." })`.
-   - Calls `synapse_release_task({ task_id: "task-123", summary: "Integration tests passing. Git staged." })`.
+*See [docs/client-configuration.md](docs/client-configuration.md) for manual setup guides across Windows, macOS, and Linux.*
 
 ---
 
-## 📚 In-Depth Documentation
+## 🏗️ Architecture & Concurrency Model
 
-- [Architecture & Concurrency Guide](docs/architecture.md)
-- [Complete Tools Reference](docs/tools-reference.md)
-- [Multi-Agent Collaboration Recipes](docs/multi-agent-workflows.md)
+When multiple agents run simultaneously, each agent launches its own isolated `stdio` process. Synapse bridges this isolation using an embedded SQLite WAL engine:
+
+```text
+  ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+  │   Antigravity   │       │   Claude Code   │       │      Codex      │
+  │   (IDE Agent)   │       │ (Terminal CLI)  │       │(Sandbox Runner) │
+  └────────┬────────┘       └────────┬────────┘       └────────┬────────┘
+           │ stdio                   │ stdio                   │ stdio
+           ▼                         ▼                         ▼
+  ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+  │   Synapse MCP   │       │   Synapse MCP   │       │   Synapse MCP   │
+  │   Instance 1    │       │   Instance 2    │       │   Instance 3    │
+  └────────┬────────┘       └────────┬────────┘       └────────┬────────┘
+           │                         │                         │
+           └─────────────────────────┼─────────────────────────┘
+                                     ▼
+                    ┌─────────────────────────────────┐
+                    │    .synapse/brain.db (SQLite)   │
+                    │   PRAGMA journal_mode = WAL;    │
+                    │   PRAGMA busy_timeout = 5000;   │
+                    ├─────────────────────────────────┤
+                    │ 🔒 File Locks & Task Board      │
+                    │ 📜 Architecture Decisions (ADRs)│
+                    │ ❓ Investigation Unknowns       │
+                    │ 🧭 Specialty Router & Handoffs  │
+                    │ 📊 Activity Audit Trail         │
+                    └─────────────────────────────────┘
+```
+
+---
+
+## 🛠️ Complete MCP Tools Catalog
+
+Synapse exposes 12 typed MCP tools designed specifically for multi-agent workflows:
+
+### 1. Coordination & Anti-Collision
+- **`synapse_claim_task`**: Declares task ownership and places advisory locks on specific file paths (e.g. `["src/auth/**"]`). Rejects with detailed conflict info if another agent holds the lock.
+- **`synapse_release_task`**: Completes a task, clears file locks, and records a work summary.
+- **`synapse_get_tasks`**: Lists all active, pending, and blocked tasks and which files are currently locked.
+
+### 2. Shared Memory & Architectural Decisions
+- **`synapse_record_decision`**: Saves an Architectural Decision Record (ADR) (context, decision, trade-offs) so no agent contradicts established conventions.
+- **`synapse_record_knowledge`**: Stores reusable project conventions, secrets gotchas, or API patterns.
+- **`synapse_query_memory`**: Fast indexed search across all decisions and knowledge entries.
+
+### 3. Investigation Unknowns & Gaps (Inspired by REA)
+- **`synapse_record_unknown`**: Reports an unexplained error, missing requirement, or investigation gap for another agent to pick up.
+- **`synapse_resolve_unknown`**: Closes a gap with verified evidence or an explanation.
+- **`synapse_list_unknowns`**: Lists all open, investigating, and resolved gaps sorted by severity.
+
+### 4. Specialty Routing & Handoffs
+- **`synapse_recommend_agent`**: Evaluates task descriptions against the agent capability matrix (Antigravity for UI/IDE architecture, Claude Code for terminal/git/tests, Codex for isolated scripts).
+- **`synapse_handoff_task`**: Transfers task ownership and file locks from one agent to another with handoff instructions.
+- **`synapse_get_active_agents`**: Reports active agents seen in the last 15 minutes.
+
+*For full parameter schemas and examples, see [docs/tools-reference.md](docs/tools-reference.md).*
+
+---
+
+## 🤝 Collaboration Workflow in Practice
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant AG as Antigravity (IDE)
+    participant Syn as Synapse (.synapse/brain.db)
+    participant CC as Claude Code (CLI)
+
+    Dev->>AG: "Refactor auth and write integration tests"
+    AG->>Syn: synapse_claim_task("Refactor Auth", lock_patterns: ["src/auth/**"])
+    Syn-->>AG: Task claimed (task-101), locks acquired
+    AG->>Syn: synapse_record_decision("Use Argon2id for hashing")
+    AG->>Syn: synapse_record_unknown("Refresh token rotation window?")
+    AG->>Syn: synapse_handoff_task(to: "claude-code", task: "task-101", "Schema done. Run test suite.")
+    
+    CC->>Syn: synapse_get_tasks()
+    Syn-->>CC: Task-101 assigned to you with locks
+    CC->>CC: Runs `npm test` in terminal & fixes token rotation
+    CC->>Syn: synapse_resolve_unknown("unk-202", "15 minute sliding window")
+    CC->>Syn: synapse_release_task("task-101", "Tests passing 100%")
+    Syn-->>CC: Locks freed, task marked completed
+```
+
+---
+
+## 🔒 Security & Local-First Privacy
+
+- **100% Local-First**: No data leaves your machine. The database resides in `.synapse/brain.db`.
+- **Zero Telemetry**: No tracking, phone-home, or third-party analytical endpoints.
+- **Advisory Non-Destructive Locks**: Synapse never changes filesystem permissions or hides files; locks are managed purely in database transactions.
+- **Config Backups**: Auto-setup creates `.synapse.backup` before modifying any agent configuration file.
+
+*See [SECURITY.md](SECURITY.md) for vulnerability reporting guidelines.*
+
+---
+
+## 📚 Deep Documentation
+
+- 🏛️ [Architecture & Concurrency Guide](docs/architecture.md)
+- 🛠️ [Complete Tools Reference](docs/tools-reference.md)
+- 🤝 [Multi-Agent Collaboration Recipes](docs/multi-agent-workflows.md)
+- 🔌 [Client Configuration Guide](docs/client-configuration.md)
+- 📜 [Contributing Guidelines](CONTRIBUTING.md)
+- 🤖 [Repository Guidelines for AI Agents](AGENTS.md)
 
 ---
 
