@@ -9,8 +9,9 @@
 [![Protocol: MCP](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-8A2BE2)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-F5A623.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/Privacy-100%25%20Local--Only-success)](SECURITY.md)
+[![Live Website](https://img.shields.io/badge/Website-holaluiz.github.io%2Fsynapse--mcp-blueviolet)](https://holaluiz.github.io/synapse-mcp/)
 
-[🇺🇸 English](README.md) • [🇧🇷 Português](README.pt-BR.md)
+[🇺🇸 English](README.md) • [🇧🇷 Português](README.pt-BR.md) • [🌐 Live Website](https://holaluiz.github.io/synapse-mcp/)
 
 </div>
 
