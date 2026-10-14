@@ -1,24 +1,37 @@
+<div align="center">
+
 # 🧠 Synapse MCP
 
 **Unified Brain, Shared Memory, File Locks, and Task Board for Multi-Agent AI Development.**
 
-Work with **Claude Code**, **Codex**, and **Antigravity** on the **same project simultaneously**, without collisions, lost context, or duplicated work.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![MCP](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-green.svg)](https://modelcontextprotocol.io/)
+[![Node: SQLite](https://img.shields.io/badge/Engine-Node:SQLite%20(WAL)-orange.svg)](https://nodejs.org/)
+
+[🇺🇸 English](README.md) • [🇧🇷 Português](README.pt-BR.md)
+
+</div>
+
+---
+
+Work with **Claude Code**, **Codex**, **Antigravity**, and **Cursor** on the **same project simultaneously**, without collisions, lost context, or duplicated work.
 
 ---
 
 ## 🎯 The Problem
 
-When you run multiple AI coding agents on the same repository:
-1. **Isolated Processes**: Each agent runs its own MCP server process over `stdio`. RAM is not shared.
-2. **Context Blindness**: Claude Code has no idea what Antigravity just refactored or decided.
-3. **Collision & File Corruption**: Two agents may edit the same files concurrently, overwriting each other's changes.
-4. **No Specialization**: Agents don't know who is best equipped for what task.
+When running multiple AI coding agents on the same repository:
+1. **Isolated OS Processes**: Each agent runs its own MCP server process over `stdio`. RAM is completely isolated.
+2. **Context Blindness**: Claude Code in terminal has no idea what Antigravity just refactored or decided in the IDE.
+3. **Collision & Race Conditions**: Two agents can edit the same files concurrently, overwriting each other's changes.
+4. **Lack of Specialization**: Agents don't know who is best equipped for what task.
 
 ---
 
 ## 💡 The Solution
 
-Synapse MCP connects all your agents to an **ephemeral/persistent SQLite WAL memory hub** located in `.synapse/brain.db` at your repository root.
+Synapse MCP connects all your agents to an **embedded SQLite WAL memory hub** located in `.synapse/brain.db` at your repository root. Zero external servers, zero background daemons, zero cloud dependencies.
 
 ```mermaid
 flowchart TD
@@ -26,16 +39,18 @@ flowchart TD
         AG1["Claude Code<br/>(Terminal / Git / Test Heavy)"]
         AG2["Antigravity<br/>(IDE / Architecture / UI / Subagents)"]
         AG3["Codex<br/>(Sandbox / Isolated Utilities)"]
+        AG4["Cursor<br/>(Fast Inline Completions)"]
     end
 
-    subgraph "Synapse MCP (stdio per client)"
+    subgraph "Synapse MCP (stdio instance per agent)"
         MCP1["synapse-mcp instance"]
         MCP2["synapse-mcp instance"]
         MCP3["synapse-mcp instance"]
+        MCP4["synapse-mcp instance"]
     end
 
     subgraph "Shared Brain (.synapse/brain.db)"
-        WAL["SQLite WAL Engine<br/>(High Concurrency ACID)"]
+        WAL["SQLite WAL Engine<br/>(High Concurrency ACID / 5s Busy Timeout)"]
         LOCKS["🔒 File Locks & Task Board"]
         ADRS["📜 Architectural Decisions (ADRs)"]
         UNK["❓ Unknowns & Investigation Gaps"]
@@ -45,10 +60,12 @@ flowchart TD
     AG1 <--> MCP1
     AG2 <--> MCP2
     AG3 <--> MCP3
+    AG4 <--> MCP4
 
     MCP1 <--> WAL
     MCP2 <--> WAL
     MCP3 <--> WAL
+    MCP4 <--> WAL
 
     WAL --- LOCKS
     WAL --- ADRS
@@ -62,9 +79,8 @@ flowchart TD
 
 ### 1. Installation
 
-Clone or install in your project:
 ```bash
-git clone https://github.com/your-username/synapse-mcp.git
+git clone https://github.com/holaluiz/synapse-mcp.git
 cd synapse-mcp
 npm install
 npm run build
@@ -72,7 +88,7 @@ npm run build
 
 ### 2. Auto-Setup for All Agents
 
-Inspired by REA's setup engine, Synapse can auto-detect and register itself into your installed agents with one command:
+Inspired by REA's configuration engine, Synapse can auto-detect and register itself into your installed agents with a single command:
 ```bash
 npm run setup
 ```
@@ -126,6 +142,14 @@ npm run doctor
 
 ---
 
+## 📚 In-Depth Documentation
+
+- [Architecture & Concurrency Guide](docs/architecture.md)
+- [Complete Tools Reference](docs/tools-reference.md)
+- [Multi-Agent Collaboration Recipes](docs/multi-agent-workflows.md)
+
+---
+
 ## 📄 License
 
-MIT © Luiz / Um Cara Caramelo
+MIT © [Luiz / Um Cara Caramelo](https://github.com/holaluiz)
