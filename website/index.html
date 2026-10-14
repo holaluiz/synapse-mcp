@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Synapse MCP — Unified Multi-Agent Brain & Memory</title>
+  <meta name="description" content="Coordinate Claude Code, Antigravity, Codex, and Cursor on the same project concurrently with shared memory, file locks, and ADRs." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="./">
+        <span>🧠 Synapse MCP</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#simulator" data-i18n="navDocs">Simulator</a></li>
+        <li><a href="#features" data-i18n="navArch">Features</a></li>
+        <li><a href="#clients" data-i18n="navClients">Clients</a></li>
+        <li><a href="https://github.com/holaluiz/synapse-mcp" target="_blank" rel="noopener">GitHub</a></li>
+      </ul>
+      <div class="nav-controls">
+        <button id="lang-btn" class="btn-ctrl" onclick="toggleLanguage()">🇧🇷 PT</button>
+        <button id="theme-btn" class="btn-ctrl" onclick="toggleTheme()">🌙</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="container">
+        <div class="badge-row">
+          <span class="badge highlight">MCP Protocol</span>
+          <span class="badge">Node:SQLite WAL</span>
+          <span class="badge">100% Local-Only</span>
+          <span class="badge">MIT License</span>
+        </div>
+
+        <h1 class="hero-title" data-i18n="heroTitle">
+          Coordinate anything across <span class="gradient-text">AI coding agents</span>
+        </h1>
+        <p class="hero-subtitle" data-i18n="heroSubtitle">
+          Connect Claude Code, Antigravity, Codex, and Cursor on the same project concurrently — without code collisions, context blindness, or duplicated work.
+        </p>
+
+        <!-- Terminal Quickstart Box -->
+        <div class="terminal-box">
+          <div class="terminal-header">
+            <div class="dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">bash</span>
+          </div>
+          <div class="terminal-body">
+            <div class="terminal-code">
+              <span class="prompt-symbol">$</span>
+              <span id="cmd-text">npm install && npm run setup</span>
+            </div>
+            <button id="copy-btn" class="btn-copy" onclick="copyCommand()" data-i18n="btnCopy">Copy</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive Live Showcase Simulator -->
+    <section id="simulator" class="section">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title" data-i18n="simTitle">Live Multi-Agent Simulation</h2>
+          <p class="section-desc" data-i18n="simDesc">Experience how Synapse resolves file collisions and coordinates memory between AI agents in real time.</p>
+        </div>
+
+        <div class="simulator-card">
+          <div class="sim-grid">
+            <!-- Controls Panel -->
+            <div class="sim-panel">
+              <div class="panel-header">
+                <span data-i18n="panelControls">Agent Action Panel</span>
+                <span class="badge">Interactive</span>
+              </div>
+              <div class="sim-controls">
+                <button class="btn-sim btn-sim-antigravity" onclick="simAntigravityClaim()">
+                  <span data-i18n="btnAntigravityClaim">Antigravity: Claim Auth & Lock 'src/auth/*'</span>
+                  <span>🔒</span>
+                </button>
+                <button class="btn-sim btn-sim-claude" onclick="simClaudeClaim()">
+                  <span data-i18n="btnClaudeClaim">Claude Code: Try to edit 'src/auth/*'</span>
+                  <span>⚡</span>
+                </button>
+                <button class="btn-sim btn-sim-release" onclick="simRelease()">
+                  <span data-i18n="btnRelease">Release Task & Clear Locks</span>
+                  <span>🔓</span>
+                </button>
+              </div>
+
+              <div id="lock-status" class="lock-status-box" data-i18n="lockFree">
+                Status: No files currently locked.
+              </div>
+            </div>
+
+            <!-- Log Stream Panel -->
+            <div class="sim-panel">
+              <div class="panel-header">
+                <span data-i18n="panelLogs">Shared SQLite Activity Log (WAL)</span>
+                <span style="font-size: 0.75rem; color: var(--accent-green);">● Active</span>
+              </div>
+              <div id="log-stream" class="log-stream">
+                <!-- Log entries added dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="section">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title" data-i18n="featTitle">Why Synapse MCP?</h2>
+        </div>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🛡️</div>
+            <h3 class="feature-title" data-i18n="feat1Title">100% Local-First</h3>
+            <p class="feature-text" data-i18n="feat1Text">All state lives in .synapse/brain.db. Zero cloud dependencies, zero external network sockets, zero telemetry.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔒</div>
+            <h3 class="feature-title" data-i18n="feat2Title">Anti-Collision Locks</h3>
+            <p class="feature-text" data-i18n="feat2Text">File locks prevent race conditions when multiple agents edit the same repository simultaneously.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📜</div>
+            <h3 class="feature-title" data-i18n="feat3Title">Shared Architecture Memory</h3>
+            <p class="feature-text" data-i18n="feat3Text">Architectural Decision Records (ADRs) persist across agents so established conventions are never reverted.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">❓</div>
+            <h3 class="feature-title" data-i18n="feat4Title">Investigation Unknowns</h3>
+            <p class="feature-text" data-i18n="feat4Text">Agents flag unanswered questions or unexpected bugs for peer agents to investigate and resolve.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Client Matrix Section -->
+    <section id="clients" class="section">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title" data-i18n="clientsTitle">Supported AI Clients</h2>
+          <p class="section-desc" data-i18n="clientsDesc">Automatic one-command setup for all major coding assistants.</p>
+        </div>
+
+        <table class="client-table">
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Interface</th>
+              <th>Config Path</th>
+              <th>Auto-Setup</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Antigravity</strong></td>
+              <td>IDE (Google DeepMind)</td>
+              <td><span class="code-inline">~/.gemini/config/mcp_config.json</span></td>
+              <td><span style="color: var(--accent-green);">✔ Supported</span></td>
+            </tr>
+            <tr>
+              <td><strong>Claude Code</strong></td>
+              <td>Terminal CLI (Anthropic)</td>
+              <td><span class="code-inline">~/.claude.json</span></td>
+              <td><span style="color: var(--accent-green);">✔ Supported</span></td>
+            </tr>
+            <tr>
+              <td><strong>Codex</strong></td>
+              <td>CLI / Sandbox (OpenAI)</td>
+              <td><span class="code-inline">~/.codex/config.toml</span></td>
+              <td><span style="color: var(--accent-green);">✔ Supported</span></td>
+            </tr>
+            <tr>
+              <td><strong>Cursor</strong></td>
+              <td>IDE</td>
+              <td><span class="code-inline">~/.cursor/mcp.json</span></td>
+              <td><span style="color: var(--accent-green);">✔ Supported</span></td>
+            </tr>
+            <tr>
+              <td><strong>OpenCode</strong></td>
+              <td>CLI</td>
+              <td><span class="code-inline">~/.config/opencode/opencode.json</span></td>
+              <td><span style="color: var(--accent-green);">✔ Supported</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/holaluiz/synapse-mcp">GitHub</a>
+        <a href="https://github.com/holaluiz/synapse-mcp/blob/main/docs/architecture.md">Architecture</a>
+        <a href="https://github.com/holaluiz/synapse-mcp/blob/main/docs/tools-reference.md">Tools Reference</a>
+        <a href="https://github.com/holaluiz/synapse-mcp/blob/main/LICENSE">License</a>
+      </div>
+      <p data-i18n="footerText">MIT License © 2026 Luiz / Um Cara Caramelo. Built for the open-source AI community.</p>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
