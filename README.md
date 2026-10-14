@@ -4,6 +4,7 @@
 
 **Coordinate anything across AI coding agents — from system architecture down to terminal tests.**
 
+[![CI](https://github.com/holaluiz/synapse-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/holaluiz/synapse-mcp/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node: SQLite](https://img.shields.io/badge/Engine-Node:SQLite%20(WAL)-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Protocol: MCP](https://img.shields.io/badge/Protocol-Model%20Context%20Protocol-8A2BE2)](https://modelcontextprotocol.io/)
@@ -21,7 +22,7 @@ Connect **Claude Code**, **Antigravity**, **Codex**, and **Cursor** to work on t
 
 > [!IMPORTANT]
 > **Zero Daemons. Zero Cloud. Zero Native Builds.**
-> Synapse runs on Node 22/24's native `node:sqlite` driver in Write-Ahead Logging (WAL) mode. Every agent process communicates directly with `.synapse/brain.db` with sub-millisecond ACID concurrency.
+> Synapse runs on Node's built-in `node:sqlite` driver (Node `>= 22.13`) in Write-Ahead Logging (WAL) mode. Every agent process communicates directly with `.synapse/brain.db` with sub-millisecond ACID concurrency.
 
 ---
 
@@ -39,6 +40,9 @@ npm run setup
 
 # 3. Verify connection & diagnostics
 npm run doctor
+
+# 4. (Optional) Run the test suite, including a multi-process lock race
+npm test
 ```
 
 ---
@@ -96,12 +100,12 @@ When multiple agents run simultaneously, each agent launches its own isolated `s
 
 ## 🛠️ Complete MCP Tools Catalog
 
-Synapse exposes 12 typed MCP tools designed specifically for multi-agent workflows:
+Synapse exposes 14 typed MCP tools designed specifically for multi-agent workflows:
 
 ### 1. Coordination & Anti-Collision
-- **`synapse_claim_task`**: Declares task ownership and places advisory locks on specific file paths (e.g. `["src/auth/**"]`). Rejects with detailed conflict info if another agent holds the lock.
-- **`synapse_release_task`**: Completes a task, clears file locks, and records a work summary.
-- **`synapse_get_tasks`**: Lists all active, pending, and blocked tasks and which files are currently locked.
+- **`synapse_claim_task`**: Declares task ownership and places advisory locks on files, directories or globs (e.g. `["src/auth/**"]`). Patterns are compared by **overlap**, so a lock on `src/auth/**` blocks a claim on `src/auth/login.ts`. The check and the insert run in one SQLite write transaction, so two agents can never win the same files.
+- **`synapse_release_task`**: Completes a task you own, clears its file locks, and records a work summary. `force: true` clears stale locks left by a crashed agent (logged in the audit trail).
+- **`synapse_get_tasks`**: Lists all active, pending, and blocked tasks, their handoff notes, and which files are currently locked.
 
 ### 2. Shared Memory & Architectural Decisions
 - **`synapse_record_decision`**: Saves an Architectural Decision Record (ADR) (context, decision, trade-offs) so no agent contradicts established conventions.
@@ -110,13 +114,15 @@ Synapse exposes 12 typed MCP tools designed specifically for multi-agent workflo
 
 ### 3. Investigation Unknowns & Gaps (Inspired by REA)
 - **`synapse_record_unknown`**: Reports an unexplained error, missing requirement, or investigation gap for another agent to pick up.
+- **`synapse_investigate_unknown`**: Marks an open gap as `investigating` under your name, so no other agent duplicates the investigation.
 - **`synapse_resolve_unknown`**: Closes a gap with verified evidence or an explanation.
 - **`synapse_list_unknowns`**: Lists all open, investigating, and resolved gaps sorted by severity.
 
-### 4. Specialty Routing & Handoffs
+### 4. Specialty Routing, Handoffs & Audit
 - **`synapse_recommend_agent`**: Evaluates task descriptions against the agent capability matrix (Antigravity for UI/IDE architecture, Claude Code for terminal/git/tests, Codex for isolated scripts).
-- **`synapse_handoff_task`**: Transfers task ownership and file locks from one agent to another with handoff instructions.
+- **`synapse_handoff_task`**: Transfers task ownership and file locks from the owning agent to another, with handoff notes the receiver sees in `synapse_get_tasks`.
 - **`synapse_get_active_agents`**: Reports active agents seen in the last 15 minutes.
+- **`synapse_get_activity`**: Reads the shared audit trail (claims, releases, handoffs, decisions, gaps), filterable by agent and `since` timestamp.
 
 *For full parameter schemas and examples, see [docs/tools-reference.md](docs/tools-reference.md).*
 
@@ -166,6 +172,7 @@ sequenceDiagram
 - 🛠️ [Complete Tools Reference](docs/tools-reference.md)
 - 🤝 [Multi-Agent Collaboration Recipes](docs/multi-agent-workflows.md)
 - 🔌 [Client Configuration Guide](docs/client-configuration.md)
+- 📝 [Changelog](CHANGELOG.md)
 - 📜 [Contributing Guidelines](CONTRIBUTING.md)
 - 🤖 [Repository Guidelines for AI Agents](AGENTS.md)
 

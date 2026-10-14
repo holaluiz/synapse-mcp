@@ -24,6 +24,7 @@ When coordinating through Synapse tools:
 
 ## 3. Code & Build Standards
 
-- Always run `npm run build` (`tsc`) after code modifications.
+- Always run `npm run build` (`tsc`) after code modifications, and `npm test` before handing work off.
+- Any new check-then-write logic against the database must run inside `withTransaction()` (`BEGIN IMMEDIATE`); schema changes go through `migrateSchema()` with a `SCHEMA_VERSION` bump.
 - Preserve backward-compatibility of tool inputs and outputs.
 - Keep responses concise, structured, and free of superficial AI fluff.

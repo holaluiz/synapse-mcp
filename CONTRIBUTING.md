@@ -19,7 +19,7 @@ Thank you for your interest in contributing to **Synapse MCP**! We welcome bug f
 ## 2. Development Workflow
 
 ### Prerequisites
-- Node.js `>= 22.0.0` (with built-in `node:sqlite`)
+- Node.js `>= 22.13.0` (built-in `node:sqlite` without the `--experimental-sqlite` flag)
 - npm `>= 10.0.0`
 
 ### Setup
@@ -32,6 +32,9 @@ npm run build
 
 ### Running Tests & Diagnostics
 ```bash
+# Build and run the node:test suite (unit, MCP integration and multi-process lock race tests)
+npm test
+
 # Check system and connected client status
 npm run doctor
 
@@ -59,7 +62,7 @@ node dist/cli.js setup --dry-run
 ## 4. Submitting a Pull Request
 
 1. Fork the repository and create a feature branch (`git checkout -b feature/my-cool-feature`).
-2. Run `npm run build` and ensure TypeScript compiles cleanly with zero errors.
+2. Run `npm test` and ensure TypeScript compiles cleanly and every test passes. New behavior needs a test in `test/`; tests import the compiled `dist/` output, so they exercise exactly what ships.
 3. Commit using conventional commit format:
    - `feat: add Windsurf client adapter`
    - `fix: resolve file lock race condition on Windows`

@@ -92,3 +92,30 @@ args = ["/absolute/path/to/synapse-mcp/dist/cli.js", "mcp"]
 command = "C:\\Program Files\\nodejs\\node.exe"
 args = ["D:\\meus documentos\\synapse-mcp\\dist\\cli.js", "mcp"]
 ```
+
+---
+
+## 3. Pinning the Workspace (`SYNAPSE_WORKSPACE`)
+
+Synapse stores its brain in `.synapse/brain.db` under the workspace root, which it finds by searching upwards from the server's working directory for `.git` or `.synapse`. Most clients start MCP servers inside the open project, so this just works.
+
+If a client starts servers from another directory (for example your home folder), agents would end up with **different databases** and could not see each other. Run `synapse doctor` from the same place to check the resolved `[Workspace Root]`, and pin it with an environment variable when needed:
+
+```json
+{
+  "mcpServers": {
+    "synapse": {
+      "command": "node",
+      "args": ["/absolute/path/to/synapse-mcp/dist/cli.js", "mcp"],
+      "env": { "SYNAPSE_WORKSPACE": "/absolute/path/to/your/project" }
+    }
+  }
+}
+```
+
+```toml
+[mcp_servers.synapse]
+command = "node"
+args = ["/absolute/path/to/synapse-mcp/dist/cli.js", "mcp"]
+env = { SYNAPSE_WORKSPACE = "/absolute/path/to/your/project" }
+```
